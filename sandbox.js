@@ -2,124 +2,215 @@ const outputContainer = document.getElementById("output-container");
 const inputText = document.getElementById("input-text");
 const sendBtn = document.getElementById("send-btn");
 
+const isChromeAISupported = () => {
+  return (
+    chrome &&
+    chrome.experimental &&
+    chrome.experimental.languageDetector &&
+    chrome.experimental.translate &&
+    chrome.experimental.summarize
+  );
+};
+
+function showError(message, duration = 5000) {
+  const errorDiv = document.createElement("div");
+  errorDiv.className = "error";
+  errorDiv.innerHTML = `
+    <strong>Error:</strong> ${message}
+    ${!isChromeAISupported() ? '<div class="warning">Chrome AI features not supported</div>' : ""}
+  `;
+  outputContainer.appendChild(errorDiv);
+  setTimeout(() => errorDiv.remove(), duration);
+}
+
 async function detectLanguage(text) {
+  if (!isChromeAISupported()) {
+    showError("Language detection requires Chrome AI support");
+    return null;
+  }
+
   try {
     const result = await chrome.experimental.languageDetector.detect({ text });
-    return result.languageCode;
+    return result.languageCode || "unknown";
   } catch (error) {
-    showError("Language detection failed");
+    showError(`Language detection failed: ${error.message}`);
     return null;
   }
 }
 
 async function summarizeText(text) {
+  if (!isChromeAISupported()) {
+    showError("Summarization requires Chrome AI support");
+    return null;
+  }
+
   try {
-    const result = await chrome.experimental.summarize({ text });
-    return result.summary;
+    const result = await chrome.experimental.summarize({
+      text,
+      config: {
+        format: "bullets",
+        length: "brief",
+      },
+    });
+    return result.summary || "No summary available";
   } catch (error) {
-    showError("Summarization failed");
+    showError(`Summarization failed: ${error.message}`);
     return null;
   }
 }
 
 async function translateText(text, targetLang) {
+  if (!isChromeAISupported()) {
+    showError("Translation requires Chrome AI support");
+    return null;
+  }
+
   try {
     const result = await chrome.experimental.translate({
       text,
       targetLang,
+      options: {
+        preserveFormatting: true,
+      },
     });
-    return result.translatedText;
+    return result.translatedText || text;
   } catch (error) {
-    showError("Translation failed");
+    showError(`Translation failed: ${error.message}`);
     return null;
   }
 }
 
-function createMessageElement(text) {
+function createMessageElement(text, type = "user") {
   const messageDiv = document.createElement("div");
-  messageDiv.className = "message";
-  messageDiv.textContent = text;
+  messageDiv.className = `message ${type}`;
+  messageDiv.innerHTML = `
+    <div class="content">${text}</div>
+    <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+  `;
   return messageDiv;
 }
 
 async function handleUserInput() {
+  if (!isChromeAISupported()) {
+    showError("This browser doesn't support Chrome AI features");
+    return;
+  }
+
   const text = inputText.value.trim();
   if (!text) {
     showError("Please enter some text");
     return;
   }
 
-  inputText.value = "";
-  const messageElement = createMessageElement(text);
-  outputContainer.appendChild(messageElement);
+  try {
+    inputText.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = `<div class="loader"></div>`;
 
-  // Detect language
-  const detectedLang = await detectLanguage(text);
-  if (detectedLang) {
-    const langElement = document.createElement("div");
-    langElement.textContent = `Detected language: ${detectedLang}`;
-    langElement.style.fontSize = "0.9em";
-    langElement.style.color = "#666";
-    messageElement.appendChild(langElement);
-  }
+    const messageElement = createMessageElement(text, "user-message");
+    outputContainer.appendChild(messageElement);
+    inputText.value = "";
 
-  // Create action buttons
-  const actionsDiv = document.createElement("div");
-  actionsDiv.className = "actions";
+    const processingIndicator = createMessageElement("Processing...", "system-message");
+    outputContainer.appendChild(processingIndicator);
 
-  // Summarize button
-  if (text.length > 150 && detectedLang === "en") {
-    const summarizeBtn = document.createElement("button");
-    summarizeBtn.textContent = "Summarize";
-    summarizeBtn.onclick = async () => {
-      summarizeBtn.disabled = true;
-      const summary = await summarizeText(text);
-      if (summary) {
-        const summaryElement = createMessageElement(`Summary: ${summary}`);
-        summaryElement.style.marginLeft = "30px";
-        outputContainer.appendChild(summaryElement);
-      }
-      summarizeBtn.disabled = false;
-    };
-    actionsDiv.appendChild(summarizeBtn);
-  }
-
-  // Translate controls
-  const translateSelect = document.createElement("select");
-  const languages = ["en", "pt", "es", "ru", "tr", "fr"];
-  translateSelect.innerHTML = languages
-    .map((lang) => `<option value="${lang}">${lang.toUpperCase()}</option>`)
-    .join("");
-
-  const translateBtn = document.createElement("button");
-  translateBtn.textContent = "Translate";
-  translateBtn.onclick = async () => {
-    translateBtn.disabled = true;
-    const translation = await translateText(text, translateSelect.value);
-    if (translation) {
-      const translationElement = createMessageElement(`Translation: ${translation}`);
-      translationElement.style.marginLeft = "30px";
-      outputContainer.appendChild(translationElement);
+    const detectedLang = await detectLanguage(text);
+    if (detectedLang) {
+      messageElement.innerHTML += `
+        <div class="language-tag">
+          Detected language: ${detectedLang.toUpperCase()}
+        </div>
+      `;
     }
-    translateBtn.disabled = false;
-  };
 
-  actionsDiv.appendChild(translateSelect);
-  actionsDiv.appendChild(translateBtn);
-  messageElement.appendChild(actionsDiv);
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "actions";
 
-  outputContainer.scrollTop = outputContainer.scrollHeight;
+    if (text.length > 50) {
+      const summarizeBtn = document.createElement("button");
+      summarizeBtn.className = "ai-action";
+      summarizeBtn.innerHTML = `
+        <span>Summarize</span>
+        <div class="loader" hidden></div>
+      `;
+      summarizeBtn.onclick = async () => {
+        try {
+          summarizeBtn.disabled = true;
+          summarizeBtn.querySelector(".loader").hidden = false;
+
+          const summary = await summarizeText(text);
+          if (summary) {
+            const summaryElement = createMessageElement(
+              `
+              <strong>Summary:</strong><br>${summary}
+            `,
+              "summary-message"
+            );
+            outputContainer.appendChild(summaryElement);
+          }
+        } finally {
+          summarizeBtn.disabled = false;
+          summarizeBtn.querySelector(".loader").hidden = true;
+        }
+      };
+      actionsDiv.appendChild(summarizeBtn);
+    }
+
+    const translateSelect = document.createElement("select");
+    translateSelect.innerHTML = `
+      <option value="en">English</option>
+      <option value="es">Spanish</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+      <option value="zh">Chinese</option>
+    `;
+
+    const translateBtn = document.createElement("button");
+    translateBtn.className = "ai-action";
+    translateBtn.innerHTML = `
+      <span>Translate</span>
+      <div class="loader" hidden></div>
+    `;
+    translateBtn.onclick = async () => {
+      try {
+        translateBtn.disabled = true;
+        translateBtn.querySelector(".loader").hidden = false;
+
+        const translation = await translateText(text, translateSelect.value);
+        if (translation) {
+          const translationElement = createMessageElement(
+            `
+            <strong>${translateSelect.selectedOptions[0].text} Translation:</strong><br>${translation}
+          `,
+            "translation-message"
+          );
+          outputContainer.appendChild(translationElement);
+        }
+      } finally {
+        translateBtn.disabled = false;
+        translateBtn.querySelector(".loader").hidden = true;
+      }
+    };
+
+    actionsDiv.appendChild(translateSelect);
+    actionsDiv.appendChild(translateBtn);
+    messageElement.appendChild(actionsDiv);
+
+    processingIndicator.remove();
+  } catch (error) {
+    showError(`Operation failed: ${error.message}`);
+  } finally {
+    inputText.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+      </svg>
+    `;
+    outputContainer.scrollTop = outputContainer.scrollHeight;
+  }
 }
 
-function showError(message) {
-  const errorDiv = document.createElement("div");
-  errorDiv.className = "error";
-  errorDiv.textContent = message;
-  outputContainer.appendChild(errorDiv);
-  setTimeout(() => errorDiv.remove(), 3000);
-}
-
-// Event listeners
 sendBtn.addEventListener("click", handleUserInput);
 inputText.addEventListener("keypress", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -127,3 +218,7 @@ inputText.addEventListener("keypress", (e) => {
     handleUserInput();
   }
 });
+
+if (!isChromeAISupported()) {
+  showError("This application requires Chrome browser with AI features enabled", 0);
+}

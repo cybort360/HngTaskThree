@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Origin Trial Tokens -->
+    <!-- Chrome Origin Trial Tokens -->
     <meta
       http-equiv="origin-trial"
       content="AlozyCk4Pp1IJjpI8ocw6N3Y1I3OubpqUu4mMYT8zkjcI2aUsZ9s9teS8UDyYvLeB/t8FO9UzqDlJwdoBe+zBwkAAAB5eyJvcmlnaW4iOiJodHRwczovL2huZy10YXNrLXRocmVlLXJvc2UudmVyY2VsLmFwcDo0NDMiLCJmZWF0dXJlIjoiVHJhbnNsYXRpb25BUEkiLCJleHBpcnkiOjE3NTMxNDI0MDAsImlzU3ViZG9tYWluIjp0cnVlfQ=="
@@ -21,16 +21,22 @@
   </head>
   <body>
     <nav>
-      <img src="images/octane.png" alt="logo" />
+      <img src="images/octane.png" alt="XYZ Text Processor logo" />
       <h1>XYZ TEXT PROCESSOR</h1>
     </nav>
-    <div class="container" id="output-container"></div>
+    <div class="container" id="output-container" aria-live="polite"></div>
     <div class="input-container">
-      <textarea id="input-text" placeholder="Enter your text here..." aria-label="Input text"></textarea>
-      <button id="send-btn" aria-label="Send">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+      <textarea
+        id="input-text"
+        placeholder="Enter your text here..."
+        aria-label="Input text"
+        maxlength="2000"
+      ></textarea>
+      <button id="send-btn" aria-label="Process text">
+        <svg class="btn-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
           <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
         </svg>
+        <div class="loader" hidden aria-hidden="true"></div>
       </button>
     </div>
     <script src="sandbox.js"></script>
